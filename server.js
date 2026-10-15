@@ -160,7 +160,7 @@ app.post('/api/chat', async (req, res) => {
                 })
             });
         } else {
-            const model = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
+            const model = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
             upstream = await fetch(
                 `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`,
                 {
@@ -172,7 +172,7 @@ app.post('/api/chat', async (req, res) => {
                             role: m.role === 'assistant' ? 'model' : 'user',
                             parts: [{ text: m.content }]
                         })),
-                        generationConfig: { maxOutputTokens: 500 }
+                        generationConfig: { maxOutputTokens: 1500 }
                     })
                 }
             );
