@@ -3,6 +3,10 @@ const mysql = require('mysql2');
 const cors = require('cors');
 const path = require('path');
 
+if (typeof fetch !== 'function') {
+    console.error('Tu versión de Node (' + process.version + ') es muy vieja: el chat necesita Node 18 o superior.');
+}
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -179,8 +183,12 @@ app.post('/api/chat', async (req, res) => {
         }
 
         if (!upstream.ok) {
-            console.error('Error del proveedor de IA:', upstream.status, await upstream.text().catch(() => ''));
-            return res.status(502).json({ error: 'Cuartetito no pudo responder ahora. Probá de nuevo en unos segundos.' });
+            const cuerpo = await upstream.text().catch(() => '');
+            console.error('Error del proveedor de IA:', upstream.status, cuerpo);
+            let motivo = '';
+            try { const j = JSON.parse(cuerpo); motivo = (j.error && j.error.message) || ''; } catch (_) { motivo = cuerpo; }
+            // Se muestra el motivo para poder diagnosticar. Antes de la expo se puede reemplazar por un mensaje simple.
+            return res.status(502).json({ error: `Cuartetito no pudo responder (error ${upstream.status}): ${String(motivo).slice(0, 200)}` });
         }
 
         res.setHeader('Content-Type', 'text/plain; charset=utf-8');
@@ -198,7 +206,8 @@ app.post('/api/chat', async (req, res) => {
         res.end();
     } catch (err) {
         console.error('Error en /api/chat:', err);
-        if (!res.headersSent) res.status(500).json({ error: 'Cuartetito no pudo responder ahora. Probá de nuevo en unos segundos.' });
+        const causa = (err && err.cause && (err.cause.code || err.cause.message)) || (err && err.message) || 'desconocido';
+        if (!res.headersSent) res.status(500).json({ error: `Cuartetito no pudo responder (${causa}).` });
         else res.end();
     }
 });
