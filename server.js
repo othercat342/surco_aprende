@@ -6,6 +6,28 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// ==========================================
+// >>> PEGÁ TU CLAVE DE GEMINI ACÁ (entre las comillas) <<<
+// ADVERTENCIA: si subís este archivo a GitHub con la clave puesta,
+// GitHub bloquea el push. Antes de subir, volvé a dejar 'PEGA_TU_CLAVE_ACA'.
+// ==========================================
+const GEMINI_API_KEY_AQUI = 'AQ.Ab8RN6Idzy0mJ1hqG1t7PsloTLQvxMAc38O1n_6xGZ5CazS6bw';
+
+// ==========================================
+// ARCHIVO .env (claves y datos privados)
+// Si existe un archivo .env al lado de server.js, se cargan sus variables.
+// Ese archivo NO se sube a GitHub (lo bloquea .gitignore).
+// Formato:  GEMINI_API_KEY=tu_clave
+// ==========================================
+try {
+    require('fs').readFileSync(path.join(__dirname, '.env'), 'utf8').split(/\r?\n/).forEach((linea) => {
+        const m = linea.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/);
+        if (!m || linea.trim().startsWith('#')) return;
+        const valor = m[2].replace(/^(['"])(.*)\1$/, '$2');
+        if (process.env[m[1]] === undefined) process.env[m[1]] = valor;
+    });
+} catch (_) { /* no hay .env: se usan las variables del sistema (por ejemplo, las de Railway) */ }
+
 app.use(express.json({ limit: '50kb' }));
 app.use(cors());
 
@@ -111,7 +133,7 @@ app.post('/api/chat', async (req, res) => {
     if (!messages.length) return res.status(400).json({ error: 'Escribí una pregunta para Cuartetito.' });
 
     const anthropicKey = process.env.ANTHROPIC_API_KEY;
-    const geminiKey = process.env.GEMINI_API_KEY;
+    const geminiKey = process.env.GEMINI_API_KEY || (GEMINI_API_KEY_AQUI !== 'PEGA_TU_CLAVE_ACA' ? GEMINI_API_KEY_AQUI : '');
     if (!anthropicKey && !geminiKey) {
         return res.status(503).json({ error: 'El chat todavía no está configurado en el servidor.' });
     }
