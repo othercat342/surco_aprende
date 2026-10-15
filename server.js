@@ -164,22 +164,31 @@ app.post('/api/chat', async (req, res) => {
                 })
             });
         } else {
-            const model = process.env.GEMINI_MODEL || 'gemini-3.5-flash';
-            upstream = await fetch(
-                `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`,
-                {
-                    method: 'POST',
-                    headers: { 'content-type': 'application/json', 'x-goog-api-key': geminiKey },
-                    body: JSON.stringify({
-                        systemInstruction: { parts: [{ text: system }] },
-                        contents: messages.map(m => ({
-                            role: m.role === 'assistant' ? 'model' : 'user',
-                            parts: [{ text: m.content }]
-                        })),
-                        generationConfig: { maxOutputTokens: 1500 }
-                    })
-                }
-            );
+            // Si el modelo principal está saturado (503) o sin cuota (429), se prueba con el de respaldo.
+            const modelos = [
+                process.env.GEMINI_MODEL || 'gemini-3.5-flash',
+                process.env.GEMINI_MODEL_RESPALDO || 'gemini-3.1-flash-lite'
+            ].filter((m, i, arr) => m && arr.indexOf(m) === i);
+            const cuerpoGemini = JSON.stringify({
+                systemInstruction: { parts: [{ text: system }] },
+                contents: messages.map(m => ({
+                    role: m.role === 'assistant' ? 'model' : 'user',
+                    parts: [{ text: m.content }]
+                })),
+                generationConfig: { maxOutputTokens: 1500 }
+            });
+            for (const model of modelos) {
+                upstream = await fetch(
+                    `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`,
+                    {
+                        method: 'POST',
+                        headers: { 'content-type': 'application/json', 'x-goog-api-key': geminiKey },
+                        body: cuerpoGemini
+                    }
+                );
+                if (upstream.ok || ![429, 500, 503].includes(upstream.status)) break;
+                console.error(`Gemini (${model}) respondió ${upstream.status}, probando el modelo de respaldo...`);
+            }
         }
 
         if (!upstream.ok) {
@@ -187,6 +196,9 @@ app.post('/api/chat', async (req, res) => {
             console.error('Error del proveedor de IA:', upstream.status, cuerpo);
             let motivo = '';
             try { const j = JSON.parse(cuerpo); motivo = (j.error && j.error.message) || ''; } catch (_) { motivo = cuerpo; }
+            if ([429, 503].includes(upstream.status)) {
+                return res.status(502).json({ error: 'Cuartetito está con mucha demanda en este momento. Probá de nuevo en unos segundos.' });
+            }
             // Se muestra el motivo para poder diagnosticar. Antes de la expo se puede reemplazar por un mensaje simple.
             return res.status(502).json({ error: `Cuartetito no pudo responder (error ${upstream.status}): ${String(motivo).slice(0, 200)}` });
         }
