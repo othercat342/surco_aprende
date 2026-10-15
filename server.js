@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 3000;
 // ADVERTENCIA: si subís este archivo a GitHub con la clave puesta,
 // GitHub bloquea el push. Antes de subir, volvé a dejar 'PEGA_TU_CLAVE_ACA'.
 // ==========================================
-const GEMINI_API_KEY_AQUI = 'AQ.Ab8RN6Idzy0mJ1hqG1t7PsloTLQvxMAc38O1n_6xGZ5CazS6bw';
+const GEMINI_API_KEY_AQUI = 'PEGA_TU_CLAVE_ACA';
 
 // ==========================================
 // ARCHIVO .env (claves y datos privados)
