@@ -80,13 +80,26 @@ if (!process.env.SESSION_SECRET) console.warn('Aviso: falta SESSION_SECRET; las 
 const COOKIE = 'surco_sesion';
 const DURACION_MS = 30 * 24 * 60 * 60 * 1000;
 
-db.query(`CREATE TABLE IF NOT EXISTS usuarios (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    nombre VARCHAR(60) NOT NULL,
-    email VARCHAR(100) NOT NULL UNIQUE,
-    password_hash VARCHAR(200) NOT NULL,
-    fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-) ENGINE=InnoDB`, (err) => { if (err) console.error('No se pudo crear la tabla usuarios:', err.code || err.message); });
+(async () => {
+    try {
+        const q = db.promise();
+        await q.query(`CREATE TABLE IF NOT EXISTS usuarios (
+            id INT AUTO_INCREMENT PRIMARY KEY,
+            nombre VARCHAR(60) NOT NULL,
+            email VARCHAR(100) NOT NULL UNIQUE,
+            password_hash VARCHAR(200) NULL,
+            google_id VARCHAR(40) NULL UNIQUE,
+            fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ) ENGINE=InnoDB`);
+        // Si la tabla ya existía de antes: permitir cuentas sin contraseña y sumar google_id
+        await q.query('ALTER TABLE usuarios MODIFY password_hash VARCHAR(200) NULL');
+        await q.query('ALTER TABLE usuarios ADD COLUMN google_id VARCHAR(40) NULL UNIQUE').catch((e) => {
+            if (e.code !== 'ER_DUP_FIELDNAME') throw e;
+        });
+    } catch (err) {
+        console.error('No se pudo preparar la tabla usuarios:', err.code || err.message);
+    }
+})();
 
 function hashPassword(pass) {
     const salt = crypto.randomBytes(16);
@@ -186,6 +199,53 @@ app.get('/api/yo', async (req, res) => {
         const [filas] = await db.promise().query('SELECT id, nombre, email FROM usuarios WHERE id = ?', [sesion.id]);
         res.json({ usuario: filas[0] || null });
     } catch (_) { res.json({ usuario: null }); }
+});
+
+// ------------------------------------------
+// Ingreso con Google (Google Identity Services)
+// Necesita GOOGLE_CLIENT_ID en el .env y "npm install" (google-auth-library).
+// ------------------------------------------
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
+let googleClient = null;
+if (GOOGLE_CLIENT_ID) {
+    try {
+        const { OAuth2Client } = require('google-auth-library');
+        googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
+    } catch (_) {
+        console.error('Falta la librería de Google: ejecutá "npm install" para activar el ingreso con Google.');
+    }
+}
+
+// El front pregunta acá si tiene que mostrar el botón de Google
+app.get('/api/config', (req, res) => {
+    res.json({ googleClientId: googleClient ? GOOGLE_CLIENT_ID : '' });
+});
+
+app.post('/api/login-google', limitar, async (req, res) => {
+    if (!googleClient) return res.status(503).json({ error: 'El ingreso con Google no está configurado.' });
+    try {
+        const ticket = await googleClient.verifyIdToken({ idToken: String(req.body.credential || ''), audience: GOOGLE_CLIENT_ID });
+        const p = ticket.getPayload();
+        if (!p || !p.email || !p.email_verified) return res.status(401).json({ error: 'Google no verificó tu email.' });
+        const email = p.email.toLowerCase();
+        const nombre = String(p.name || email.split('@')[0]).trim().slice(0, 60) || 'Usuario';
+        const q = db.promise();
+
+        let [filas] = await q.query('SELECT id, nombre, email, google_id FROM usuarios WHERE google_id = ? OR email = ? LIMIT 1', [p.sub, email]);
+        let u = filas[0];
+        if (!u) {
+            const [r] = await q.query('INSERT INTO usuarios (nombre, email, google_id) VALUES (?, ?, ?)', [nombre, email, p.sub]);
+            u = { id: r.insertId, nombre, email };
+        } else if (!u.google_id) {
+            // Ya tenía cuenta con ese email: se vincula con Google
+            await q.query('UPDATE usuarios SET google_id = ? WHERE id = ?', [p.sub, u.id]);
+        }
+        ponerCookie(req, res, crearToken(u.id), DURACION_MS);
+        res.json({ usuario: { id: u.id, nombre: u.nombre, email: u.email } });
+    } catch (err) {
+        console.error('Error en login con Google:', err.code || err.message);
+        res.status(401).json({ error: 'No pudimos ingresar con Google. Probá de nuevo.' });
+    }
 });
 
 // ==========================================
