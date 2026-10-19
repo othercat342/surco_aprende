@@ -173,3 +173,15 @@ body{background:radial-gradient(60rem 28rem at 12% -4%,rgba(255,179,71,.2),trans
 .songs button{border:1px solid var(--line);background:transparent;color:var(--muted);padding:.4rem .9rem;border-radius:2rem;font:inherit;font-size:.95rem;cursor:pointer}
 .songs button:hover{color:var(--text);border-color:var(--muted)}
 .songs button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#241623}
+
+/* ===== CUENTA ===== */
+.topright{display:flex;align-items:center;gap:.7rem}
+.authbox{max-width:26rem}
+.authform{display:grid;gap:1rem;margin-top:1.2rem}
+.authform label{display:grid;gap:.3rem;font:800 .95rem "Bricolage Grotesque",sans-serif;color:var(--muted)}
+.authform input{background:var(--panel);border:2px solid var(--line);border-radius:.8rem;color:var(--text);padding:.7rem 1rem;font:inherit}
+.authform .btn{border:0;cursor:pointer;justify-self:start}
+.authform .btn:disabled{opacity:.5;cursor:wait}
+.autherr{margin:0;color:var(--sky);min-height:1.4em;font-size:1rem}
+.pills button[aria-pressed="true"]{background:var(--accent);color:#241623;border-color:var(--accent)}
+.ghost{text-decoration:none;display:inline-block}
