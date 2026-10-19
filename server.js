@@ -258,6 +258,33 @@ app.post('/api/login-google', limitar, async (req, res) => {
     }
 });
 
+// ------------------------------------------
+// DIAGNÓSTICO TEMPORAL: abrí /api/diagnostico en el navegador para ver por qué falla MySQL.
+// Cuando ya ande todo, borrá este bloque.
+// ------------------------------------------
+app.get('/api/diagnostico', async (req, res) => {
+    const out = { variables: {} };
+    ['MYSQLHOST', 'MYSQLUSER', 'MYSQLPASSWORD', 'MYSQLDATABASE', 'MYSQLPORT'].forEach((k) => { out.variables[k] = process.env[k] ? 'definida' : 'FALTA'; });
+    out.usa_localhost = (process.env.DB_HOST || process.env.MYSQLHOST || 'localhost') === 'localhost';
+    try {
+        await db.promise().query('SELECT 1');
+        out.conexion = 'OK';
+    } catch (err) {
+        out.conexion = 'FALLA';
+        out.codigo_error = err.code || 'desconocido';
+        return res.json(out);
+    }
+    try {
+        const [cols] = await db.promise().query('SHOW COLUMNS FROM usuarios');
+        out.tabla_usuarios = 'OK';
+        out.columnas = cols.map((c) => c.Field);
+    } catch (err) {
+        out.tabla_usuarios = 'FALLA';
+        out.codigo_error = err.code || 'desconocido';
+    }
+    res.json(out);
+});
+
 // ==========================================
 // RUTAS DE LA API
 // ==========================================
