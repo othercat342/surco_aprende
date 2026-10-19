@@ -91,6 +91,12 @@ const DURACION_MS = 30 * 24 * 60 * 60 * 1000;
             google_id VARCHAR(40) NULL UNIQUE,
             fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         ) ENGINE=InnoDB`);
+        await q.query(`CREATE TABLE IF NOT EXISTS racha_dias (
+            usuario_id INT NOT NULL,
+            dia DATE NOT NULL,
+            PRIMARY KEY (usuario_id, dia),
+            CONSTRAINT fk_racha_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB`);
         // Si la tabla ya existía de antes: permitir cuentas sin contraseña y sumar google_id
         await q.query('ALTER TABLE usuarios MODIFY password_hash VARCHAR(200) NULL');
         await q.query('ALTER TABLE usuarios ADD COLUMN google_id VARCHAR(40) NULL UNIQUE').catch((e) => {
@@ -283,6 +289,71 @@ app.get('/api/diagnostico', async (req, res) => {
         out.codigo_error = err.code || 'desconocido';
     }
     res.json(out);
+});
+
+// ------------------------------------------
+// RACHA DE PRÁCTICA (estilo Duolingo)
+// Cada día en que la persona practica se guarda una fila en racha_dias.
+// La racha es la cantidad de días seguidos; si hoy todavía no practicó, sigue viva si practicó ayer.
+// ------------------------------------------
+function sumarDias(str, n) {
+    const d = new Date(str + 'T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() + n);
+    return d.toISOString().slice(0, 10);
+}
+function calcularRacha(dias, hoy) {
+    const set = new Set(dias);
+    const hecho = set.has(hoy);
+    let cursor = hecho ? hoy : sumarDias(hoy, -1), actual = 0;
+    while (set.has(cursor)) { actual++; cursor = sumarDias(cursor, -1); }
+    let mejor = 0, corrida = 0, previo = null;
+    for (const d of [...set].sort()) {
+        corrida = previo && sumarDias(previo, 1) === d ? corrida + 1 : 1;
+        mejor = Math.max(mejor, corrida);
+        previo = d;
+    }
+    const semana = [];
+    for (let i = 6; i >= 0; i--) { const d = sumarDias(hoy, -i); semana.push({ dia: d, hecho: set.has(d) }); }
+    return { actual, mejor, hecho, semana };
+}
+// El día lo manda el navegador (así cuenta según la hora de cada persona); se valida que sea razonable
+function diaValido(v) {
+    v = String(v || '');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return null;
+    const t = Date.parse(v + 'T00:00:00Z');
+    if (isNaN(t) || new Date(t).toISOString().slice(0, 10) !== v) return null;
+    return Math.abs(t - Date.now()) > 2 * 86400000 ? null : v;
+}
+function usuarioId(req) {
+    const sesion = leerToken(cookieDe(req, COOKIE));
+    return sesion ? sesion.id : null;
+}
+async function estadoRacha(uid, hoy) {
+    const [filas] = await db.promise().query("SELECT DATE_FORMAT(dia, '%Y-%m-%d') AS dia FROM racha_dias WHERE usuario_id = ? ORDER BY dia DESC LIMIT 1000", [uid]);
+    return calcularRacha(filas.map((f) => f.dia), hoy);
+}
+
+app.get('/api/racha', async (req, res) => {
+    const uid = usuarioId(req);
+    if (!uid) return res.status(401).json({ error: 'Iniciá sesión para llevar tu racha.' });
+    const hoy = diaValido(req.query.hoy);
+    if (!hoy) return res.status(400).json({ error: 'Fecha inválida.' });
+    try { res.json(await estadoRacha(uid, hoy)); }
+    catch (err) { console.error('Error al leer la racha:', err.code || '', err.message); res.status(500).json({ error: 'No pudimos leer tu racha.' }); }
+});
+
+app.post('/api/racha', async (req, res) => {
+    const uid = usuarioId(req);
+    if (!uid) return res.status(401).json({ error: 'Iniciá sesión para llevar tu racha.' });
+    const hoy = diaValido(req.body.hoy);
+    if (!hoy) return res.status(400).json({ error: 'Fecha inválida.' });
+    try {
+        const [r] = await db.promise().query('INSERT IGNORE INTO racha_dias (usuario_id, dia) VALUES (?, ?)', [uid, hoy]);
+        res.json({ ...(await estadoRacha(uid, hoy)), nuevo: r.affectedRows === 1 });
+    } catch (err) {
+        console.error('Error al guardar la racha:', err.code || '', err.message);
+        res.status(500).json({ error: 'No pudimos guardar tu racha.' });
+    }
 });
 
 // ==========================================
