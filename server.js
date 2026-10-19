@@ -67,6 +67,128 @@ function consulta(sql) {
 }
 
 // ==========================================
+// CUENTAS DE USUARIO (registro, ingreso y sesión)
+// Sin librerías extra: contraseñas con scrypt y sesión en cookie firmada (HttpOnly).
+// En producción definí SESSION_SECRET (un texto largo y aleatorio); si no, las sesiones
+// se cierran cada vez que se reinicia el servidor.
+// ==========================================
+const crypto = require('crypto');
+app.set('trust proxy', 1);
+
+const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString('hex');
+if (!process.env.SESSION_SECRET) console.warn('Aviso: falta SESSION_SECRET; las sesiones se pierden al reiniciar.');
+const COOKIE = 'surco_sesion';
+const DURACION_MS = 30 * 24 * 60 * 60 * 1000;
+
+db.query(`CREATE TABLE IF NOT EXISTS usuarios (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(60) NOT NULL,
+    email VARCHAR(100) NOT NULL UNIQUE,
+    password_hash VARCHAR(200) NOT NULL,
+    fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB`, (err) => { if (err) console.error('No se pudo crear la tabla usuarios:', err.code || err.message); });
+
+function hashPassword(pass) {
+    const salt = crypto.randomBytes(16);
+    return salt.toString('hex') + ':' + crypto.scryptSync(pass, salt, 64).toString('hex');
+}
+function verificarPassword(pass, guardado) {
+    const [salt, hash] = String(guardado || '').split(':');
+    if (!salt || !hash) return false;
+    const calc = crypto.scryptSync(pass, Buffer.from(salt, 'hex'), 64);
+    const orig = Buffer.from(hash, 'hex');
+    return calc.length === orig.length && crypto.timingSafeEqual(calc, orig);
+}
+const DUMMY_HASH = hashPassword('relleno-para-igualar-tiempos');
+
+function firmar(texto) {
+    return crypto.createHmac('sha256', SESSION_SECRET).update(texto).digest('base64url');
+}
+function crearToken(id) {
+    const cuerpo = Buffer.from(JSON.stringify({ id, exp: Date.now() + DURACION_MS })).toString('base64url');
+    return cuerpo + '.' + firmar(cuerpo);
+}
+function leerToken(token) {
+    const [cuerpo, firma] = String(token || '').split('.');
+    if (!cuerpo || !firma) return null;
+    const esperada = Buffer.from(firmar(cuerpo));
+    const recibida = Buffer.from(firma);
+    if (esperada.length !== recibida.length || !crypto.timingSafeEqual(esperada, recibida)) return null;
+    try {
+        const datos = JSON.parse(Buffer.from(cuerpo, 'base64url').toString());
+        return datos.exp > Date.now() ? datos : null;
+    } catch (_) { return null; }
+}
+function cookieDe(req, nombre) {
+    const par = (req.headers.cookie || '').split(';').map((c) => c.trim()).find((c) => c.startsWith(nombre + '='));
+    return par ? decodeURIComponent(par.slice(nombre.length + 1)) : '';
+}
+function ponerCookie(req, res, valor, maxAgeMs) {
+    res.append('Set-Cookie', `${COOKIE}=${valor}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${Math.floor(maxAgeMs / 1000)}` + (req.secure ? '; Secure' : ''));
+}
+
+// Límite simple de intentos por IP (10 cada 15 minutos) contra fuerza bruta
+const intentos = new Map();
+function limitar(req, res, next) {
+    const ahora = Date.now();
+    const reg = intentos.get(req.ip);
+    if (!reg || reg.reset < ahora) { intentos.set(req.ip, { n: 1, reset: ahora + 15 * 60 * 1000 }); return next(); }
+    if (++reg.n > 10) return res.status(429).json({ error: 'Demasiados intentos. Probá de nuevo en unos minutos.' });
+    next();
+}
+setInterval(() => { const t = Date.now(); intentos.forEach((v, k) => { if (v.reset < t) intentos.delete(k); }); }, 10 * 60 * 1000).unref();
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+app.post('/api/registro', limitar, async (req, res) => {
+    const nombre = String(req.body.nombre || '').trim();
+    const email = String(req.body.email || '').trim().toLowerCase();
+    const password = String(req.body.password || '');
+    if (nombre.length < 2 || nombre.length > 60) return res.status(400).json({ error: 'El nombre tiene que tener entre 2 y 60 letras.' });
+    if (!EMAIL_RE.test(email) || email.length > 100) return res.status(400).json({ error: 'Ese email no parece válido.' });
+    if (password.length < 8 || password.length > 100) return res.status(400).json({ error: 'La contraseña tiene que tener al menos 8 caracteres.' });
+    try {
+        const [r] = await db.promise().query('INSERT INTO usuarios (nombre, email, password_hash) VALUES (?, ?, ?)', [nombre, email, hashPassword(password)]);
+        ponerCookie(req, res, crearToken(r.insertId), DURACION_MS);
+        res.status(201).json({ usuario: { id: r.insertId, nombre, email } });
+    } catch (err) {
+        if (err.code === 'ER_DUP_ENTRY') return res.status(409).json({ error: 'Ya hay una cuenta con ese email.' });
+        console.error('Error en registro:', err.code || err.message);
+        res.status(500).json({ error: 'No pudimos crear la cuenta. Probá de nuevo más tarde.' });
+    }
+});
+
+app.post('/api/login', limitar, async (req, res) => {
+    const email = String(req.body.email || '').trim().toLowerCase();
+    const password = String(req.body.password || '');
+    try {
+        const [filas] = await db.promise().query('SELECT id, nombre, email, password_hash FROM usuarios WHERE email = ?', [email]);
+        const u = filas[0];
+        const ok = verificarPassword(password, u ? u.password_hash : DUMMY_HASH) && u;
+        if (!ok) return res.status(401).json({ error: 'Email o contraseña incorrectos.' });
+        ponerCookie(req, res, crearToken(u.id), DURACION_MS);
+        res.json({ usuario: { id: u.id, nombre: u.nombre, email: u.email } });
+    } catch (err) {
+        console.error('Error en login:', err.code || err.message);
+        res.status(500).json({ error: 'No pudimos iniciar sesión. Probá de nuevo más tarde.' });
+    }
+});
+
+app.post('/api/logout', (req, res) => {
+    ponerCookie(req, res, '', 0);
+    res.json({ ok: true });
+});
+
+app.get('/api/yo', async (req, res) => {
+    const sesion = leerToken(cookieDe(req, COOKIE));
+    if (!sesion) return res.json({ usuario: null });
+    try {
+        const [filas] = await db.promise().query('SELECT id, nombre, email FROM usuarios WHERE id = ?', [sesion.id]);
+        res.json({ usuario: filas[0] || null });
+    } catch (_) { res.json({ usuario: null }); }
+});
+
+// ==========================================
 // RUTAS DE LA API
 // ==========================================
 app.get('/api/libros', consulta('SELECT * FROM libros'));
