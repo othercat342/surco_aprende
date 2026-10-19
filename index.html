@@ -23,6 +23,7 @@
   <header class="top">
     <a class="brand" href="#inicio" aria-label="Surco Aprende, ir al inicio"><img src="logo-header.png" alt="Surco Aprende" width="295" height="100"></a>
     <div class="topright">
+      <a class="streak off" id="streakChip" href="#cuenta" aria-label="Tu racha de práctica" hidden>🔥 <span id="streakNum">0</span></a>
       <a class="ghost" id="accountLink" href="#cuenta">Ingresar</a>
       <button class="burger" id="burger" aria-label="Abrir menú" aria-expanded="false" aria-controls="drawer">
         <span></span><span></span><span></span>
@@ -205,10 +206,18 @@
       </div>
       <div class="authbox" id="userBox" hidden>
         <p class="lead" id="userHello"></p>
+        <div class="streakpanel" id="streakPanel">
+          <div class="streakbig"><span id="streakBig">0</span><small>días de racha</small></div>
+          <p class="hint" id="streakMsg"></p>
+          <ol class="week" id="weekDots" aria-label="Últimos 7 días"></ol>
+          <p class="hint">Tu mejor racha: <b id="streakBest">0</b> días</p>
+        </div>
         <button class="ghost" id="logoutBtn" type="button">Cerrar sesión</button>
       </div>
     </section>
   </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
   <footer>Hecho con HTML, CSS y JavaScript. Las canciones se reproducen desde YouTube.</footer>
 
@@ -221,6 +230,7 @@
   <script src="chat.js"></script>
   <script src="menu.js"></script>
   <script src="auth.js"></script>
+  <script src="racha.js"></script>
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
