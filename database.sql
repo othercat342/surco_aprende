@@ -10,6 +10,7 @@ CREATE DATABASE IF NOT EXISTS surco_aprende CHARACTER SET utf8mb4 COLLATE utf8mb
 USE surco_aprende;
 
 -- Se borran en orden inverso a las relaciones para que el script se pueda ejecutar varias veces
+DROP TABLE IF EXISTS racha_dias;
 DROP TABLE IF EXISTS usuarios;
 DROP TABLE IF EXISTS prestamos;
 DROP TABLE IF EXISTS practica;
@@ -77,6 +78,14 @@ CREATE TABLE usuarios (
     password_hash VARCHAR(200) NULL,
     google_id VARCHAR(40) NULL UNIQUE,
     fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+-- 7. Racha de práctica (un registro por usuario y día practicado)
+CREATE TABLE racha_dias (
+    usuario_id INT NOT NULL,
+    dia DATE NOT NULL,
+    PRIMARY KEY (usuario_id, dia),
+    CONSTRAINT fk_racha_usuario FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 -- ==========================================
