@@ -64,6 +64,33 @@ document.addEventListener("DOMContentLoaded", () => {
     mostrarUsuario(null);
   });
 
+  // ----- Ingreso con Google (solo si el servidor tiene GOOGLE_CLIENT_ID) -----
+  function iniciarGoogle(clientId) {
+    const arrancar = () => {
+      google.accounts.id.initialize({
+        client_id: clientId,
+        callback: async (resp) => {
+          err.textContent = "";
+          try {
+            const { usuario } = await api("/api/login-google", { credential: resp.credential });
+            mostrarUsuario(usuario);
+          } catch (ex) {
+            err.textContent = ex.message;
+          }
+        }
+      });
+      google.accounts.id.renderButton($("googleBtn"), { theme: "filled_black", size: "large", shape: "pill", text: "continue_with", locale: "es" });
+      $("googleSep").hidden = false;
+    };
+    if (window.google && google.accounts) return arrancar();
+    const sc = document.createElement("script");
+    sc.src = "https://accounts.google.com/gsi/client";
+    sc.async = true;
+    sc.onload = arrancar;
+    document.head.appendChild(sc);
+  }
+  api("/api/config").then(({ googleClientId }) => { if (googleClientId) iniciarGoogle(googleClientId); }).catch(() => {});
+
   // Al cargar la página, ver si ya hay una sesión abierta (si no hay servidor, queda como invitado)
   api("/api/yo").then(({ usuario }) => mostrarUsuario(usuario)).catch(() => mostrarUsuario(null));
 });
