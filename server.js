@@ -223,15 +223,25 @@ app.get('/api/config', (req, res) => {
 
 app.post('/api/login-google', limitar, async (req, res) => {
     if (!googleClient) return res.status(503).json({ error: 'El ingreso con Google no está configurado.' });
+
+    // Paso 1: verificar el token con Google
+    let p;
     try {
         const ticket = await googleClient.verifyIdToken({ idToken: String(req.body.credential || ''), audience: GOOGLE_CLIENT_ID });
-        const p = ticket.getPayload();
-        if (!p || !p.email || !p.email_verified) return res.status(401).json({ error: 'Google no verificó tu email.' });
+        p = ticket.getPayload();
+    } catch (err) {
+        console.error('Login con Google: el token no se pudo verificar:', err.message);
+        return res.status(401).json({ error: 'Google rechazó el ingreso. Revisá que el ID de cliente del servidor sea el correcto.' });
+    }
+    if (!p || !p.email || !p.email_verified) return res.status(401).json({ error: 'Google no verificó tu email.' });
+
+    // Paso 2: buscar o crear el usuario en MySQL
+    try {
         const email = p.email.toLowerCase();
         const nombre = String(p.name || email.split('@')[0]).trim().slice(0, 60) || 'Usuario';
         const q = db.promise();
 
-        let [filas] = await q.query('SELECT id, nombre, email, google_id FROM usuarios WHERE google_id = ? OR email = ? LIMIT 1', [p.sub, email]);
+        const [filas] = await q.query('SELECT id, nombre, email, google_id FROM usuarios WHERE google_id = ? OR email = ? LIMIT 1', [p.sub, email]);
         let u = filas[0];
         if (!u) {
             const [r] = await q.query('INSERT INTO usuarios (nombre, email, google_id) VALUES (?, ?, ?)', [nombre, email, p.sub]);
@@ -243,8 +253,8 @@ app.post('/api/login-google', limitar, async (req, res) => {
         ponerCookie(req, res, crearToken(u.id), DURACION_MS);
         res.json({ usuario: { id: u.id, nombre: u.nombre, email: u.email } });
     } catch (err) {
-        console.error('Error en login con Google:', err.code || err.message);
-        res.status(401).json({ error: 'No pudimos ingresar con Google. Probá de nuevo.' });
+        console.error('Login con Google: falló la base de datos:', err.code || '', err.message);
+        res.status(500).json({ error: 'Google te reconoció, pero no pudimos guardar tu cuenta (problema con la base de datos).' });
     }
 });
 
