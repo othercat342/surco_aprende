@@ -10,6 +10,7 @@ CREATE DATABASE IF NOT EXISTS surco_aprende CHARACTER SET utf8mb4 COLLATE utf8mb
 USE surco_aprende;
 
 -- Se borran en orden inverso a las relaciones para que el script se pueda ejecutar varias veces
+DROP TABLE IF EXISTS usuarios;
 DROP TABLE IF EXISTS prestamos;
 DROP TABLE IF EXISTS practica;
 DROP TABLE IF EXISTS artistas;
@@ -66,6 +67,15 @@ CREATE TABLE practica (
     opcion_b VARCHAR(255),
     opcion_c VARCHAR(255),
     respuesta_correcta VARCHAR(10)
+) ENGINE=InnoDB;
+
+-- 6. Tabla de Usuarios de la página (registro e ingreso)
+CREATE TABLE usuarios (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nombre VARCHAR(60) NOT NULL,
+    email VARCHAR(100) NOT NULL UNIQUE,
+    password_hash VARCHAR(200) NOT NULL,
+    fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
 -- ==========================================
