@@ -185,3 +185,5 @@ body{background:radial-gradient(60rem 28rem at 12% -4%,rgba(255,179,71,.2),trans
 .autherr{margin:0;color:var(--sky);min-height:1.4em;font-size:1rem}
 .pills button[aria-pressed="true"]{background:var(--accent);color:#241623;border-color:var(--accent)}
 .ghost{text-decoration:none;display:inline-block}
+.gsep{margin:1.2rem 0 .8rem;color:var(--muted);font:800 .95rem "Bricolage Grotesque",sans-serif}
+#googleBtn{min-height:44px}
