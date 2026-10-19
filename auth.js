@@ -26,6 +26,7 @@ document.addEventListener("DOMContentLoaded", () => {
     $("accountLink").textContent = u ? u.nombre : "Ingresar";
     $("drawerAccount").textContent = u ? "Mi cuenta" : "Ingresar";
     document.body.dataset.user = u ? u.nombre : "";
+    document.dispatchEvent(new CustomEvent("usuario", { detail: u }));
   }
 
   async function api(url, datos) {
