@@ -74,7 +74,8 @@ CREATE TABLE usuarios (
     id INT AUTO_INCREMENT PRIMARY KEY,
     nombre VARCHAR(60) NOT NULL,
     email VARCHAR(100) NOT NULL UNIQUE,
-    password_hash VARCHAR(200) NOT NULL,
+    password_hash VARCHAR(200) NULL,
+    google_id VARCHAR(40) NULL UNIQUE,
     fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
 
