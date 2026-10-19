@@ -187,3 +187,4 @@ body{background:radial-gradient(60rem 28rem at 12% -4%,rgba(255,179,71,.2),trans
 .ghost{text-decoration:none;display:inline-block}
 .gsep{margin:1.2rem 0 .8rem;color:var(--muted);font:800 .95rem "Bricolage Grotesque",sans-serif}
 #googleBtn{min-height:44px}
+.authform [hidden],.authbox[hidden]{display:none}
