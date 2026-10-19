@@ -22,9 +22,12 @@
 <body data-slot="inicio">
   <header class="top">
     <a class="brand" href="#inicio" aria-label="Surco Aprende, ir al inicio"><img src="logo-header.png" alt="Surco Aprende" width="295" height="100"></a>
-    <button class="burger" id="burger" aria-label="Abrir menú" aria-expanded="false" aria-controls="drawer">
-      <span></span><span></span><span></span>
-    </button>
+    <div class="topright">
+      <a class="ghost" id="accountLink" href="#cuenta">Ingresar</a>
+      <button class="burger" id="burger" aria-label="Abrir menú" aria-expanded="false" aria-controls="drawer">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
   </header>
 
   <nav class="drawer" id="drawer" aria-label="Menú principal">
@@ -35,6 +38,7 @@
     <a href="#artistas" data-vista="artistas">Artistas</a>
     <a href="#historia" data-vista="historia">Historia</a>
     <a href="#cuartetito" data-vista="cuartetito">Cuartetito IA</a>
+    <a href="#cuenta" data-vista="cuenta" id="drawerAccount">Mi cuenta</a>
   </nav>
   <div class="scrim" id="scrim"></div>
 
@@ -173,6 +177,35 @@
         </form>
       </div>
     </section>
+
+    <!-- SLOT: CUENTA -->
+    <section class="slot block" id="cuenta" data-slot hidden>
+      <h2 id="cuentaTitle">Tu cuenta</h2>
+      <div class="authbox" id="guestBox">
+        <div class="pills" role="tablist" aria-label="Ingresar o registrarse">
+          <button type="button" id="tabLogin" aria-pressed="true">Ingresar</button>
+          <button type="button" id="tabRegistro" aria-pressed="false">Crear cuenta</button>
+        </div>
+        <form class="authform" id="authForm" novalidate>
+          <label id="nombreRow" hidden>Nombre
+            <input id="aNombre" type="text" maxlength="60" autocomplete="name">
+          </label>
+          <label>Email
+            <input id="aEmail" type="email" maxlength="100" autocomplete="email" required>
+          </label>
+          <label>Contraseña
+            <input id="aPass" type="password" minlength="8" maxlength="100" autocomplete="current-password" required>
+          </label>
+          <p class="hint" id="passHint" hidden>Mínimo 8 caracteres.</p>
+          <p class="autherr" id="authErr" role="alert" aria-live="assertive"></p>
+          <button class="btn" id="authSubmit" type="submit">Ingresar</button>
+        </form>
+      </div>
+      <div class="authbox" id="userBox" hidden>
+        <p class="lead" id="userHello"></p>
+        <button class="ghost" id="logoutBtn" type="button">Cerrar sesión</button>
+      </div>
+    </section>
   </main>
 
   <footer>Hecho con HTML, CSS y JavaScript. Las canciones se reproducen desde YouTube.</footer>
@@ -185,6 +218,7 @@
   <script src="historia.js"></script>
   <script src="chat.js"></script>
   <script src="menu.js"></script>
+  <script src="auth.js"></script>
   <script>
     if ("serviceWorker" in navigator) {
       window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
